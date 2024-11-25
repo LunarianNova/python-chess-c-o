@@ -36,13 +36,33 @@ def handle_turn(board, player):
         else:
             print("Invalid command! Use h for help")
 
-def main():
+def two_player():
     board = chess.Board()
     player = "White"
     print(board)
     while True:
         handle_turn(board, player)
         player = "White" if player == "Black" else "Black"
+
+def one_player():
+    board = chess.Board()
+    player = "White"
+    print(board)
+    while True:
+        handle_turn(board, player)
+        board.get_best_move("Black")
+        print(board)
+
+def main():
+    mode = input("Enter a mode: ")
+    if mode == "1":
+        one_player()
+    elif mode == "2":
+        two_player()
+    else:
+        print("Invalid mode! Use 1 for one player and 2 for two player")
+    
+    
 
 if __name__ == "__main__":
     main()

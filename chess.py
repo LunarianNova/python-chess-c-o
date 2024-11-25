@@ -1,3 +1,5 @@
+import random
+
 LETTERS = ["a", "b", "c", "d", "e", "f", "h", "i"]
 
 class Location:
@@ -37,6 +39,9 @@ class Location:
         if type(other) != int:
             raise TypeError("Cannot multiply Location and " + str(type(other)) + " types!")
         return Location(self.row * other, self.column * other)
+    
+    def __hash__(self) -> int:
+        return hash((self.row, self.column))
 
 class Piece:
     __slots__ = ["__name", "__shorthand", "__moves", "__position", "__owner"]
@@ -59,11 +64,7 @@ class Piece:
         return self.__shorthand + str(self.__position)
     
     def __repr__(self) -> str:
-        s = self.__name
-        s += "\n" + str(self.__position)
-        s += "\n" + str(self.__moves)
-        s += "\n" + self.__owner
-        return s
+        return self.__shorthand + str(self.__position)
 
     def get_name(self) -> str:
         return self.__name
@@ -93,7 +94,7 @@ class Rook(Piece):
 
 class Knight(Piece):
     def __init__(self, row: int, column: int, owner: str) -> None:
-        super().__init__("Knight", "N", [Location(2, 1), Location(2, -1), Location(-2, 1), Location(-2, -1)], Location(row, column), owner)
+        super().__init__("Knight", "N", [Location(2, 1), Location(2, -1), Location(-2, 1), Location(-2, -1), Location(1, 2), Location(1, -2), Location(-1, 2), Location(-1, -2)], Location(row, column), owner)
 
 class Bishop(Piece):
     def __init__(self, row: int, column: int, owner: str) -> None:
@@ -137,11 +138,12 @@ class Empty(Piece):
         super().__init__("Empty Space", "-", [], Location(row, column), "None")
 
 class Board:
-    __slots__ = ["__board", "__active_player", "number_string"]
+    __slots__ = ["__board", "__white_pieces", "__black_pieces", "number_string"]
 
     def __init__(self) -> None:
+        self.__white_pieces = []
+        self.__black_pieces = []
         self.__initialize_board()
-        self.__active_player = "White"
         self.number_string = "      1  2  3  4  5  6  7  8"
 
     def __repr__(self) -> str:
@@ -167,6 +169,24 @@ class Board:
             self.__board.append([Empty(2+i, x) for x in range(8)])
         self.__board.append([Pawn(6, x, "White") for x in range(8)])
         self.__board.append([Rook(7, 0, "White"), Knight(7, 1, "White"), Bishop(7, 2, "White"), Queen(7, 3, "White"), King(7, 4, "White"), Bishop(7, 5, "White"), Knight(7, 6, "White"), Rook(7, 7, "White")])
+        self.__black_pieces = [piece for piece in self.__board[0] + self.__board[1]]
+        self.__white_pieces = [piece for piece in self.__board[6] + self.__board[7]]
+
+    def __generate_moves(self, player: str) -> dict:
+        moves = {"raw": [], "piece": {}}
+        if player == "White":
+            pieces = self.__white_pieces
+        elif player == "Black":
+            pieces = self.__black_pieces
+        for piece in pieces:
+            piece_moves = self.__validate_moves(piece.get_position().row, piece.get_position().column)
+            for move in piece_moves:
+                moves["raw"].append(move)
+                if move not in moves["piece"].keys():
+                    moves["piece"][move] = [piece]
+                else:
+                    moves["piece"][move].append(piece)
+        return moves
 
     def __validate_moves(self, row: int, column: int) -> list:
         moves = []
@@ -175,6 +195,8 @@ class Board:
         piece_moves = piece.get_moves()
         if piece.get_name() == "Pawn":
             if piece.get_owner() == "White":
+                if self.get_piece(pos + Location(-2, 0)).get_owner() != piece.get_owner() and self.get_piece(pos + Location(-2, 0)).get_owner() != "None" and len(piece_moves) == 2:
+                    piece_moves.pop()
                 if self.get_piece(pos + Location(-1, 0)).get_owner() != piece.get_owner() and self.get_piece(pos + Location(-1, 0)).get_owner() != "None":
                     piece_moves = []
                 if self.get_piece(pos + Location(-1, -1)).get_owner != piece.get_owner() and self.get_piece(pos + Location(-1, -1)).get_owner() != "None":
@@ -182,6 +204,8 @@ class Board:
                 if self.get_piece(pos + Location(-1, 1)).get_owner() != piece.get_owner() and self.get_piece(pos + Location(-1, 1)).get_owner() != "None":
                     piece_moves.append(Location(-1, 1))
             else:
+                if self.get_piece(pos + Location(2, 0)).get_owner() != piece.get_owner() and self.get_piece(pos + Location(2, 0)).get_owner() != "None" and len(piece_moves) == 2:
+                    piece_moves.pop()
                 if self.get_piece(pos + Location(1, 0)).get_owner() != piece.get_owner() and self.get_piece(pos + Location(1, 0)).get_owner() != "None":
                     piece_moves = []
                 if self.get_piece(pos + Location(1, -1)).get_owner() != piece.get_owner() and self.get_piece(pos + Location(1, -1)).get_owner() != "None":
@@ -204,9 +228,38 @@ class Board:
                             break
         return moves
     
-    def get_piece(self, location: Location) -> Piece:
-        return self.__board[location.row][location.column]
+    def get_best_move(self, player: str) -> Location:
+        piece_values = {"Pawn": 1, "Knight": 3, "Bishop": 3, "Rook": 5, "Queen": 9, "King": 10}
+        move_values = {}
+        moves = self.__generate_moves(player)
+        for move in moves["raw"]:
+            piece = self.get_piece(move)
+            if piece.get_name() != "Empty Space":
+                move_values[move] = piece_values[piece.get_name()]
+        try:
+            best_move = max(move_values, key=move_values.get)
+            old_pieces = list(moves["piece"][best_move])
+            min = 11
+            for piece in old_pieces:
+                if piece_values[piece.get_name()] < min:
+                    min = piece_values[piece.get_name()]
+                    old_piece = piece
+            print("Opponent moved " + str(old_piece) + " to " + str(best_move))
+            self.move(old_piece.get_position(), best_move)
+        except ValueError:
+            pieces = list(moves["piece"].keys())
+            new_location = random.choice(pieces)
+            old_pieces = list(moves["piece"][new_location])
+            old_piece = random.choice(old_pieces)
+            print("Opponent moved " + old_piece.get_shorthand() + " to " + str(new_location))
+            self.move(old_piece.get_position(), new_location)
 
+    def get_piece(self, location: Location) -> Piece:
+        try:
+            return self.__board[location.row][location.column]
+        except IndexError:
+            return Empty(location.row, location.column)
+        
     def human_to_location(self, location: str) -> Location:
         return Location(LETTERS.index(location.lower()[0]), int(location[1])-1)
     
