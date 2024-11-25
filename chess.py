@@ -286,6 +286,10 @@ class Board:
         if new_location in self.__validate_moves(piece_location.row, piece_location.column):
             piece = self.get_piece(piece_location)
             piece.move(new_location)
+            if self.get_piece(new_location).get_owner() == "Black":
+                self.__black_pieces.remove(self.get_piece(new_location))
+            elif self.get_piece(new_location).get_owner() == "White":
+                self.__white_pieces.remove(self.get_piece(new_location))
             self.__board[new_location.row][new_location.column] = piece
             self.__board[piece_location.row][piece_location.column] = Empty(piece_location.row, piece_location.column)
             return True
